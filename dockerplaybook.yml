@@ -1,0 +1,138 @@
+--- # Docker installation and config
+- hosts: appserver
+  user: test
+  sudo: yes
+  connection: ssh
+  gather_facts: yes
+  vars:
+    - dossierachref: /home/test/Achref
+    - dossierkhalil: /home/test/Khalil
+  tasks:
+    - name: Installing Curl pour distributions RedHat
+      yum: pkg=curl state=latest update_cache=yes
+      when: "ansible_os_family == 'RedHat'"
+
+    - name: Installation git 
+      yum: pkg=git state=installed
+
+    - name: installation docker pour distributions Redhat
+      shell: curl -fssl https://get.docker.com/ | sh > /home/test/logDocker.log
+      when: "ansible_os_family == 'RedHat'"
+      notify: restart docker (Redhat)
+
+    - name: Update pour distributions Debian
+      apt: pkg=* state=latest
+      when: "ansible_os_family == 'Debian'"
+
+    - name: Installation docker sur Debian
+      apt: pkg=docker.io state=installed
+      when: "ansible_os_family == 'Debian'"
+
+    - name: Fixation des paths pour docker sur Debian (1/2)
+      raw: ln -sf /usr/bin/docker.io /usr/local/bin/docker
+      when: "ansible_os_family == 'Debian'"
+
+    - name:  Fixation des paths pour docker sur Debian (2/2)
+      raw: sed -i '$acomplete -F _docker docker' /etc/bash_completion.d/docker.io
+      when: "ansible_os_family == 'Debian'"
+      notify: restart docker.io (Debian)
+
+
+    - name: installation du serveur consul 
+      unarchive: src=https://releases.hashicorp.com/consul/0.6.4/consul_0.6.4_linux_amd64.zip dest=/usr/local/bin/ copy=no
+    
+    - name: Installation modules necessaires python sur Debian(1/2)
+      apt: pkg=python-dev state=latest
+      when: "ansible_os_family == 'Debian'"
+
+    - name: Installation modules necessaires python sur Debian (2/2)
+      apt: pkg=pyhton-pip state=latest
+      when: "ansible_os_family == 'Debian'"
+
+    - name: Installation modules necessaires python sur Redhat
+      yum: pkg=python-pip state=installed
+      when: "ansible_os_family == 'RedHat'"
+                   
+    - name: Install dependances pour module Docker pour ansible
+      pip:
+       name: docker-py      
+
+    - name: update pour distribution Redhat
+      yum: pkg=* state=latest
+      when: "ansible_os_family == 'RedHat'"
+
+    - name: update pour distribution Debian
+      apt: pkg=* state=latest
+      when: "ansible_os_family == 'Debian'"
+
+
+    - name: Upgrade de packages pip
+      raw: pip install --upgrade pip
+
+    - name: installation dependances pour consul(1/2)
+      pip: name=python-consul
+
+    - name: installation dependances pour consul(2/2)
+      pip: name=requests
+
+
+    - name: Run de l agent consul
+      shell: consul agent -server -bootstrap -data-dir /home/test/data/ -bind 192.168.210.133 -client 0.0.0.0  > /dev/null  &
+      sudo: no
+
+    - name: Ajout ou mise a jour de la configuration  de l'application de Achref dans le store consul
+      consul_kv:
+         key: "portachref"
+         value: "8000"
+         state: present
+
+    - name: Ajout/mise a jour de la configuration de l'application de Khalil dans le store consul
+      consul_kv:
+         key: "portkhalil"
+         value: "3000"
+         state: present
+
+            
+    - name: Importation du repo du projet de Achref
+      git: repo=https://github.com/achrefomrani/e-commerce-challenge.git dest="{{ dossierachref }}/" update=no
+    
+    - name: Importation du repo de Khalil
+      git: repo=https://github.com/khalilammarCraft/test-craftacademy dest="{{ dossierkhalil }}/" update=no
+
+ 
+    - name: build de l image de Achref
+      docker_image:
+        name: "imageachref"
+        path: "{{ dossierachref }}/"
+        state: present
+                  
+    - name: run de l image de Achref dans un conteneur docker 
+      docker:
+        image: "imageachref"
+        ports: "81:80"
+        detach: true
+        state: started        
+        net: host
+        publish_all_ports: yes
+
+    - name: build de l image de Khalil
+      docker_image:
+        name: "imagekhalil"
+        path: "{{ dossierkhalil }}/"
+        state: present
+
+    - name: run de l image de Khalil dans un conteneur docker 
+      docker:
+        image: "imagekhalil"
+        ports: "82:80"
+        detach: true
+        net: host
+        state: started    
+        publish_all_ports: yes
+
+             
+    - name: affichage des images
+      raw: docker images
+      register: images
+    - debug: var=images
+
