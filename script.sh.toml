@@ -1,0 +1,6 @@
+[template]
+src  ="script.sh.tmpl"
+dest = "tmp/script.sh"
+keys = [
+    "portkhalil"
+ ]

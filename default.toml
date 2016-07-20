@@ -1,0 +1,6 @@
+[template]
+src="default.tmpl"
+dest="/etc/nginx/sites-enabled/default"
+keys=[
+    "portkhalil"
+]"
